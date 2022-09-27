@@ -6,6 +6,7 @@ BOOL InitWindowInstance( HINSTANCE hInstance , LPCTSTR lpzClassName , LPCTSTR lp
 BOOL MakeWindowTransparent( HWND hWnd , unsigned char factor );
 BOOL CreateDeviceD3D( HWND hWnd );
 LRESULT CALLBACK WndProc( HWND hWnd , UINT message , WPARAM wParam , LPARAM lParam );
+void ResetDevice( );
 
 int main( HINSTANCE hInstance , HINSTANCE hPrevInstance , LPWSTR lpCmdLine , int nCmdShow )
 {
@@ -67,7 +68,11 @@ int main( HINSTANCE hInstance , HINSTANCE hPrevInstance , LPWSTR lpCmdLine , int
 
 			g_pd3dDevice->EndScene( );
 		}
-		g_pd3dDevice->Present( NULL , NULL , NULL , NULL );
+		HRESULT result = g_pd3dDevice->Present( NULL , NULL , NULL , NULL );
+
+		// Handle loss of D3D9 device
+		if ( result == D3DERR_DEVICELOST && g_pd3dDevice->TestCooperativeLevel( ) == D3DERR_DEVICENOTRESET )
+			ResetDevice( );
 	}
 
 	/* Shut ImGui down */
@@ -165,6 +170,15 @@ BOOL CreateDeviceD3D( HWND hWnd )
 	return TRUE;
 }
 
+void ResetDevice( )
+{
+	ImGui_ImplDX9_InvalidateDeviceObjects( );
+	HRESULT hr = g_pd3dDevice->Reset( &g_d3dpp );
+	if ( hr == D3DERR_INVALIDCALL )
+		IM_ASSERT( 0 );
+	ImGui_ImplDX9_CreateDeviceObjects( );
+}
+
 LRESULT CALLBACK WndProc( HWND hWnd , UINT message , WPARAM wParam , LPARAM lParam )
 {
 	/* Move Window ( ImGui Removed it a while ago ) */ {
@@ -197,14 +211,11 @@ LRESULT CALLBACK WndProc( HWND hWnd , UINT message , WPARAM wParam , LPARAM lPar
 	case WM_SIZE:
 		if ( g_pd3dDevice != NULL && wParam != SIZE_MINIMIZED )
 		{
-			ImGui_ImplDX9_InvalidateDeviceObjects( );
 			g_d3dpp.BackBufferWidth = LOWORD( lParam );
 			g_d3dpp.BackBufferHeight = HIWORD( lParam );
-			HRESULT hr = g_pd3dDevice->Reset( &g_d3dpp );
-			if ( hr == D3DERR_INVALIDCALL )
-				IM_ASSERT( 0 );
-			ImGui_ImplDX9_CreateDeviceObjects( );
+			ResetDevice( );
 		}
+
 		return 0;
 
 	case WM_SYSCOMMAND:
